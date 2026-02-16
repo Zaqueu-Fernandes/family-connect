@@ -14,6 +14,7 @@ import ChatList from "./pages/ChatList";
 import ChatScreen from "./pages/ChatScreen";
 import NewChat from "./pages/NewChat";
 import Profile from "./pages/Profile";
+import AdminUsers from "./pages/AdminUsers";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -56,6 +57,7 @@ function AppContent() {
         <Route path="/chat/:chatId" element={<ProtectedRoute><ChatScreen /></ProtectedRoute>} />
         <Route path="/new-chat" element={<ProtectedRoute><NewChat /></ProtectedRoute>} />
         <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+        <Route path="/admin" element={<ProtectedRoute><AdminUsers /></ProtectedRoute>} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </>
