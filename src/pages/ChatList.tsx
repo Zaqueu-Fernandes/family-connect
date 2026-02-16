@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MessageCircle, Phone, User, Search, Plus } from "lucide-react";
+import { MessageCircle, Phone, User, Search, Plus, Shield } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -24,7 +24,15 @@ export default function ChatList() {
   const [chats, setChats] = useState<ChatItem[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!user) return;
+    supabase.rpc("has_role", { _user_id: user.id, _role: "admin" }).then(({ data }) => {
+      setIsAdmin(!!data);
+    });
+  }, [user]);
 
   useEffect(() => {
     if (!user) return;
@@ -223,6 +231,12 @@ export default function ChatList() {
           <User className="h-5 w-5" />
           <span className="text-xs">Perfil</span>
         </Button>
+        {isAdmin && (
+          <Button variant="ghost" className="flex flex-col items-center gap-1 h-auto text-muted-foreground" onClick={() => navigate("/admin")}>
+            <Shield className="h-5 w-5" />
+            <span className="text-xs">Admin</span>
+          </Button>
+        )}
       </nav>
     </div>
   );
