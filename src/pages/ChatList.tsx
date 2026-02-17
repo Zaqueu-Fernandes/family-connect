@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { MessageCircle, Phone, User, Search, Plus, Shield } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useNotificationSound, useBrowserNotifications } from "@/hooks/use-notifications";
 
 interface ChatItem {
   id: string;
@@ -26,6 +27,8 @@ export default function ChatList() {
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const navigate = useNavigate();
+  const playSound = useNotificationSound();
+  const { requestPermission, showNotification } = useBrowserNotifications();
 
   useEffect(() => {
     if (!user) return;
@@ -37,10 +40,18 @@ export default function ChatList() {
   useEffect(() => {
     if (!user) return;
     loadChats();
+    requestPermission();
 
     const channel = supabase
       .channel("chat-list-updates")
-      .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, () => {
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
+        const msg = payload.new as { sender_id: string; encrypted_content?: string };
+        if (msg.sender_id !== user.id) {
+          playSound();
+          showNotification("WhatsZak", msg.encrypted_content ?? "Nova mensagem", () => {
+            window.focus();
+          });
+        }
         loadChats();
       })
       .subscribe();
