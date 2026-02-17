@@ -300,10 +300,7 @@ export default function ChatScreen() {
   };
 
   const handleViewOnceOpen = async (msgId: string) => {
-    await supabase
-      .from("messages")
-      .update({ viewed_at: new Date().toISOString() })
-      .eq("id", msgId);
+    await supabase.rpc("mark_view_once_viewed" as any, { _message_id: msgId });
     setMessages((prev) =>
       prev.map((m) =>
         m.id === msgId ? { ...m, viewed_at: new Date().toISOString() } : m
