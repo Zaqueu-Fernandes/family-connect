@@ -187,6 +187,8 @@ export type Database = {
           message_type: string
           reply_to_id: string | null
           sender_id: string
+          view_once: boolean
+          viewed_at: string | null
         }
         Insert: {
           chat_id: string
@@ -199,6 +201,8 @@ export type Database = {
           message_type?: string
           reply_to_id?: string | null
           sender_id: string
+          view_once?: boolean
+          viewed_at?: string | null
         }
         Update: {
           chat_id?: string
@@ -211,6 +215,8 @@ export type Database = {
           message_type?: string
           reply_to_id?: string | null
           sender_id?: string
+          view_once?: boolean
+          viewed_at?: string | null
         }
         Relationships: [
           {
