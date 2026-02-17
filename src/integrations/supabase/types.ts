@@ -14,6 +14,82 @@ export type Database = {
   }
   public: {
     Tables: {
+      call_ice_candidates: {
+        Row: {
+          call_id: string
+          candidate: Json
+          created_at: string
+          id: string
+          sender_id: string
+        }
+        Insert: {
+          call_id: string
+          candidate: Json
+          created_at?: string
+          id?: string
+          sender_id: string
+        }
+        Update: {
+          call_id?: string
+          candidate?: Json
+          created_at?: string
+          id?: string
+          sender_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "call_ice_candidates_call_id_fkey"
+            columns: ["call_id"]
+            isOneToOne: false
+            referencedRelation: "calls"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      calls: {
+        Row: {
+          answer: Json | null
+          callee_id: string
+          caller_id: string
+          chat_id: string
+          created_at: string
+          ended_at: string | null
+          id: string
+          offer: Json | null
+          status: string
+        }
+        Insert: {
+          answer?: Json | null
+          callee_id: string
+          caller_id: string
+          chat_id: string
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          offer?: Json | null
+          status?: string
+        }
+        Update: {
+          answer?: Json | null
+          callee_id?: string
+          caller_id?: string
+          chat_id?: string
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          offer?: Json | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calls_chat_id_fkey"
+            columns: ["chat_id"]
+            isOneToOne: false
+            referencedRelation: "chats"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_participants: {
         Row: {
           chat_id: string
