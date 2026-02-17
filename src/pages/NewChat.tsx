@@ -39,54 +39,16 @@ export default function NewChat() {
     if (!user || creating) return;
     setCreating(true);
 
-    // Check if a 1:1 chat already exists
-    const { data: myChats } = await supabase
-      .from("chat_participants")
-      .select("chat_id")
-      .eq("user_id", user.id);
+    const { data: chatId, error } = await supabase
+      .rpc("create_private_chat", { _other_user_id: otherUserId });
 
-    if (myChats) {
-      for (const { chat_id } of myChats) {
-        const { data: chat } = await supabase
-          .from("chats")
-          .select("id, is_group")
-          .eq("id", chat_id)
-          .eq("is_group", false)
-          .single();
-
-        if (chat) {
-          const { data: otherParticipant } = await supabase
-            .from("chat_participants")
-            .select("user_id")
-            .eq("chat_id", chat_id)
-            .eq("user_id", otherUserId)
-            .maybeSingle();
-
-          if (otherParticipant) {
-            navigate(`/chat/${chat_id}`);
-            return;
-          }
-        }
-      }
-    }
-
-    // Create new chat
-    const { data: newChat, error } = await supabase
-      .from("chats")
-      .insert({ is_group: false, created_by: user.id })
-      .select("id")
-      .single();
-
-    if (error || !newChat) {
+    if (error || !chatId) {
+      console.error("Error creating chat:", error);
       setCreating(false);
       return;
     }
 
-    // Add current user first so RLS allows adding the other
-    await supabase.from("chat_participants").insert({ chat_id: newChat.id, user_id: user.id });
-    await supabase.from("chat_participants").insert({ chat_id: newChat.id, user_id: otherUserId });
-
-    navigate(`/chat/${newChat.id}`);
+    navigate(`/chat/${chatId}`);
   };
 
   const filteredUsers = users.filter((u) =>
