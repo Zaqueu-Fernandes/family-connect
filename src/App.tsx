@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { useState, useRef, useCallback } from "react";
+import type { CallMode } from "@/hooks/use-webrtc";
 import SplashScreen from "@/components/SplashScreen";
 import InstallPrompt from "@/components/InstallPrompt";
 import IncomingCallDialog from "@/components/call/IncomingCallDialog";
@@ -50,12 +51,10 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 function IncomingCallHandler() {
   const { user } = useAuth();
   const { incomingCall, dismissIncoming } = useIncomingCalls(user?.id);
-  const remoteAudioRef = useRef<HTMLAudioElement>(null);
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
 
   const handleRemoteStream = useCallback((stream: MediaStream) => {
-    if (remoteAudioRef.current) {
-      remoteAudioRef.current.srcObject = stream;
-    }
+    setRemoteStream(stream);
   }, []);
 
   const handleCallEnded = useCallback(() => {
@@ -64,18 +63,20 @@ function IncomingCallHandler() {
 
   const {
     callStatus,
+    callMode,
     answerCall,
     endCall,
     rejectCall,
+    getLocalStream,
   } = useWebRTC({
     userId: user?.id ?? "",
     onRemoteStream: handleRemoteStream,
     onCallEnded: handleCallEnded,
   });
 
-  const handleAccept = () => {
+  const handleAccept = (mode: CallMode = "audio") => {
     if (incomingCall) {
-      answerCall(incomingCall.id);
+      answerCall(incomingCall.id, mode);
       dismissIncoming();
     }
   };
@@ -102,10 +103,12 @@ function IncomingCallHandler() {
           peerName={incomingCall?.callerName ?? "Usuário"}
           peerAvatar={incomingCall?.callerAvatar}
           status={callStatus as "calling" | "ringing" | "answered"}
+          mode={callMode}
+          localStream={getLocalStream()}
+          remoteStream={remoteStream}
           onHangUp={() => endCall()}
         />
       )}
-      <audio ref={remoteAudioRef} autoPlay />
     </>
   );
 }

@@ -5,13 +5,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ArrowLeft, Send, Phone } from "lucide-react";
+import { ArrowLeft, Send, Phone, Video } from "lucide-react";
 import { useNotificationSound, useBrowserNotifications } from "@/hooks/use-notifications";
 import MessageBubble from "@/components/chat/MessageBubble";
 import AttachmentPicker from "@/components/chat/AttachmentPicker";
 import AudioRecorder from "@/components/chat/AudioRecorder";
 import ActiveCallOverlay from "@/components/call/ActiveCallOverlay";
 import { useWebRTC } from "@/hooks/use-webrtc";
+import type { CallMode } from "@/hooks/use-webrtc";
 import { toast } from "@/hooks/use-toast";
 
 interface Message {
@@ -38,15 +39,13 @@ export default function ChatScreen() {
   const [chatInfo, setChatInfo] = useState<ChatInfo | null>(null);
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const remoteAudioRef = useRef<HTMLAudioElement>(null);
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const navigate = useNavigate();
   const playSound = useNotificationSound();
   const { showNotification } = useBrowserNotifications();
 
   const handleRemoteStream = useCallback((stream: MediaStream) => {
-    if (remoteAudioRef.current) {
-      remoteAudioRef.current.srcObject = stream;
-    }
+    setRemoteStream(stream);
   }, []);
 
   const handleCallEnded = useCallback(() => {
@@ -55,17 +54,19 @@ export default function ChatScreen() {
 
   const {
     callStatus,
+    callMode,
     startCall,
     endCall,
+    getLocalStream,
   } = useWebRTC({
     userId: user?.id ?? "",
     onRemoteStream: handleRemoteStream,
     onCallEnded: handleCallEnded,
   });
 
-  const handleStartCall = () => {
+  const handleStartCall = (mode: CallMode) => {
     if (!chatId || !chatInfo?.other_user_id || chatInfo.is_group) return;
-    startCall(chatId, chatInfo.other_user_id);
+    startCall(chatId, chatInfo.other_user_id, mode);
   };
 
   useEffect(() => {
@@ -284,15 +285,26 @@ export default function ChatScreen() {
           <p className="font-semibold">{chatInfo?.name ?? "..."}</p>
         </div>
         {!chatInfo?.is_group && chatInfo?.other_user_id && (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleStartCall}
-            disabled={callStatus !== "idle"}
-            className="text-primary-foreground hover:bg-primary/80"
-          >
-            <Phone className="h-5 w-5" />
-          </Button>
+          <>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => handleStartCall("video")}
+              disabled={callStatus !== "idle"}
+              className="text-primary-foreground hover:bg-primary/80"
+            >
+              <Video className="h-5 w-5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => handleStartCall("audio")}
+              disabled={callStatus !== "idle"}
+              className="text-primary-foreground hover:bg-primary/80"
+            >
+              <Phone className="h-5 w-5" />
+            </Button>
+          </>
         )}
       </header>
 
@@ -302,10 +314,12 @@ export default function ChatScreen() {
           peerName={chatInfo?.name ?? "Usuário"}
           peerAvatar={chatInfo?.avatar_url}
           status={callStatus as "calling" | "ringing" | "answered"}
+          mode={callMode}
+          localStream={getLocalStream()}
+          remoteStream={remoteStream}
           onHangUp={() => endCall()}
         />
       )}
-      <audio ref={remoteAudioRef} autoPlay />
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-3 py-4 space-y-2">
