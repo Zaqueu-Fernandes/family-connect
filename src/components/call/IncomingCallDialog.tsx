@@ -1,11 +1,12 @@
-import { Phone, PhoneOff } from "lucide-react";
+import { Phone, PhoneOff, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import type { CallMode } from "@/hooks/use-webrtc";
 
 interface IncomingCallDialogProps {
   callerName: string;
   callerAvatar?: string;
-  onAccept: () => void;
+  onAccept: (mode: CallMode) => void;
   onReject: () => void;
 }
 
@@ -34,10 +35,10 @@ export default function IncomingCallDialog({
 
         <div className="text-center">
           <p className="text-lg font-semibold">{callerName}</p>
-          <p className="text-sm text-muted-foreground animate-pulse">Chamada de áudio...</p>
+          <p className="text-sm text-muted-foreground animate-pulse">Chamada recebida...</p>
         </div>
 
-        <div className="flex gap-8">
+        <div className="flex gap-6">
           <Button
             size="icon"
             variant="destructive"
@@ -49,9 +50,16 @@ export default function IncomingCallDialog({
           <Button
             size="icon"
             className="h-14 w-14 rounded-full bg-primary hover:bg-primary/90"
-            onClick={onAccept}
+            onClick={() => onAccept("audio")}
           >
             <Phone className="h-6 w-6" />
+          </Button>
+          <Button
+            size="icon"
+            className="h-14 w-14 rounded-full bg-primary hover:bg-primary/90"
+            onClick={() => onAccept("video")}
+          >
+            <Video className="h-6 w-6" />
           </Button>
         </div>
       </div>

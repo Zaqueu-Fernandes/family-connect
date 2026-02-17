@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback, useEffect } from "react";
+import { useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 const ICE_SERVERS: RTCConfiguration = {
@@ -9,6 +9,7 @@ const ICE_SERVERS: RTCConfiguration = {
 };
 
 export type CallStatus = "idle" | "calling" | "ringing" | "answered" | "ended";
+export type CallMode = "audio" | "video";
 
 interface UseWebRTCOptions {
   userId: string;
@@ -19,6 +20,7 @@ interface UseWebRTCOptions {
 export function useWebRTC({ userId, onRemoteStream, onCallEnded }: UseWebRTCOptions) {
   const [callStatus, setCallStatus] = useState<CallStatus>("idle");
   const [callId, setCallId] = useState<string | null>(null);
+  const [callMode, setCallMode] = useState<CallMode>("audio");
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
@@ -34,10 +36,15 @@ export function useWebRTC({ userId, onRemoteStream, onCallEnded }: UseWebRTCOpti
     }
     setCallStatus("idle");
     setCallId(null);
+    setCallMode("audio");
   }, []);
 
-  const getLocalStream = async () => {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  const getLocalStream = async (mode: CallMode) => {
+    const constraints: MediaStreamConstraints = {
+      audio: true,
+      video: mode === "video" ? { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } } : false,
+    };
+    const stream = await navigator.mediaDevices.getUserMedia(constraints);
     localStreamRef.current = stream;
     return stream;
   };
@@ -115,12 +122,12 @@ export function useWebRTC({ userId, onRemoteStream, onCallEnded }: UseWebRTCOpti
     channelRef.current = channel;
   };
 
-  const startCall = async (chatId: string, calleeId: string) => {
+  const startCall = async (chatId: string, calleeId: string, mode: CallMode = "audio") => {
     try {
+      setCallMode(mode);
       setCallStatus("calling");
-      const stream = await getLocalStream();
+      const stream = await getLocalStream(mode);
 
-      // Create call record
       const { data: call, error } = await supabase
         .from("calls")
         .insert({
@@ -159,14 +166,14 @@ export function useWebRTC({ userId, onRemoteStream, onCallEnded }: UseWebRTCOpti
     }
   };
 
-  const answerCall = async (incomingCallId: string) => {
+  const answerCall = async (incomingCallId: string, mode: CallMode = "audio") => {
     try {
+      setCallMode(mode);
       setCallStatus("answered");
       setCallId(incomingCallId);
 
-      const stream = await getLocalStream();
+      const stream = await getLocalStream(mode);
 
-      // Get the call data with offer
       const { data: call } = await supabase
         .from("calls")
         .select("*")
@@ -193,7 +200,6 @@ export function useWebRTC({ userId, onRemoteStream, onCallEnded }: UseWebRTCOpti
         .update({ answer: answer as any, status: "answered" })
         .eq("id", incomingCallId);
 
-      // Apply any ICE candidates that arrived before we subscribed
       const { data: candidates } = await supabase
         .from("call_ice_candidates")
         .select("*")
@@ -237,11 +243,13 @@ export function useWebRTC({ userId, onRemoteStream, onCallEnded }: UseWebRTCOpti
   return {
     callStatus,
     callId,
+    callMode,
     startCall,
     answerCall,
     endCall,
     rejectCall,
     localStream: localStreamRef.current,
+    getLocalStream: () => localStreamRef.current,
     cleanup,
   };
 }
