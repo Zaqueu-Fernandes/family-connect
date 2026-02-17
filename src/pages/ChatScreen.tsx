@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ArrowLeft, Send, Phone, Video, X } from "lucide-react";
+import { ArrowLeft, Send, Phone, Video, X, Eye, EyeOff } from "lucide-react";
 import { useNotificationSound, useBrowserNotifications } from "@/hooks/use-notifications";
 import MessageBubble from "@/components/chat/MessageBubble";
 import AttachmentPicker from "@/components/chat/AttachmentPicker";
@@ -25,6 +25,8 @@ interface Message {
   created_at: string;
   deleted_at: string | null;
   reply_to_id: string | null;
+  view_once: boolean;
+  viewed_at: string | null;
 }
 
 interface ChatInfo {
@@ -44,6 +46,7 @@ export default function ChatScreen() {
   const [deletedForMe, setDeletedForMe] = useState<Set<string>>(new Set());
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [forwardingMsg, setForwardingMsg] = useState<Message | null>(null);
+  const [viewOnce, setViewOnce] = useState(false);
   const [senderNames, setSenderNames] = useState<Record<string, string>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
@@ -212,13 +215,16 @@ export default function ChatScreen() {
     const content = newMessage.trim();
     setNewMessage("");
     const replyId = replyingTo?.id ?? null;
+    const isViewOnce = viewOnce;
     setReplyingTo(null);
+    setViewOnce(false);
     await supabase.from("messages").insert({
       chat_id: chatId,
       sender_id: user.id,
       encrypted_content: content,
       message_type: "text",
       reply_to_id: replyId,
+      view_once: isViewOnce,
     });
     setSending(false);
   };
@@ -291,6 +297,18 @@ export default function ChatScreen() {
       .update({ deleted_at: new Date().toISOString(), encrypted_content: null, media_url: null })
       .eq("id", msgId);
     toast({ title: "Mensagem apagada para todos" });
+  };
+
+  const handleViewOnceOpen = async (msgId: string) => {
+    await supabase
+      .from("messages")
+      .update({ viewed_at: new Date().toISOString() })
+      .eq("id", msgId);
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === msgId ? { ...m, viewed_at: new Date().toISOString() } : m
+      )
+    );
   };
 
   const handleReply = (msgId: string) => {
@@ -429,12 +447,15 @@ export default function ChatScreen() {
             isMine={msg.sender_id === user?.id}
             createdAt={msg.created_at}
             deleted={!!msg.deleted_at}
+            viewOnce={msg.view_once}
+            viewedAt={msg.viewed_at}
             replyTo={getReplyInfo(msg)}
             onReply={handleReply}
             onDeleteForMe={handleDeleteForMe}
             onDeleteForAll={handleDeleteForAll}
             onForward={handleForward}
             onShare={handleShare}
+            onViewOnceOpen={handleViewOnceOpen}
           />
         ))}
         <div ref={messagesEndRef} />
@@ -460,38 +481,47 @@ export default function ChatScreen() {
         </div>
       )}
 
+      {/* View once indicator */}
+      {viewOnce && (
+        <div className="flex items-center gap-2 bg-primary/10 px-3 py-1.5 border-t border-border">
+          <EyeOff className="h-3.5 w-3.5 text-primary" />
+          <span className="text-xs text-primary font-medium flex-1">Visualização única ativada</span>
+          <Button variant="ghost" size="icon" onClick={() => setViewOnce(false)} className="h-6 w-6">
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      )}
+
       {/* Input */}
       <div className="flex items-center gap-1 border-t border-border bg-card px-2 py-2">
         <AttachmentPicker onFileSelected={handleFileSelected} disabled={sending} />
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setViewOnce(!viewOnce)}
+          className={`h-9 w-9 shrink-0 ${viewOnce ? "text-primary bg-primary/10" : "text-muted-foreground"}`}
+          title="Visualização única"
+        >
+          {viewOnce ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+        </Button>
+        <Input
+          value={newMessage}
+          onChange={(e) => setNewMessage(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Mensagem"
+          className="flex-1 rounded-full"
+        />
         {newMessage.trim() ? (
-          <>
-            <Input
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Mensagem"
-              className="flex-1 rounded-full"
-            />
-            <Button
-              size="icon"
-              onClick={handleSend}
-              disabled={!newMessage.trim() || sending}
-              className="rounded-full h-10 w-10"
-            >
-              <Send className="h-4 w-4" />
-            </Button>
-          </>
+          <Button
+            size="icon"
+            onClick={handleSend}
+            disabled={!newMessage.trim() || sending}
+            className="rounded-full h-10 w-10"
+          >
+            <Send className="h-4 w-4" />
+          </Button>
         ) : (
-          <>
-            <Input
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Mensagem"
-              className="flex-1 rounded-full"
-            />
-            <AudioRecorder onRecorded={handleAudioRecorded} disabled={sending} />
-          </>
+          <AudioRecorder onRecorded={handleAudioRecorded} disabled={sending} />
         )}
       </div>
     </div>

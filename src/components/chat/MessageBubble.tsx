@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { format } from "date-fns";
-import { FileText, Download, Reply, Trash2, Share2, Forward, X } from "lucide-react";
+import { FileText, Download, Reply, Trash2, Share2, Forward, X, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface ReplyInfo {
@@ -18,12 +18,15 @@ interface MessageBubbleProps {
   isMine: boolean;
   createdAt: string;
   deleted: boolean;
+  viewOnce?: boolean;
+  viewedAt?: string | null;
   replyTo?: ReplyInfo | null;
   onReply: (id: string) => void;
   onDeleteForMe: (id: string) => void;
   onDeleteForAll: (id: string) => void;
   onForward: (id: string) => void;
   onShare: (id: string) => void;
+  onViewOnceOpen?: (id: string) => void;
 }
 
 export default function MessageBubble({
@@ -34,14 +37,45 @@ export default function MessageBubble({
   isMine,
   createdAt,
   deleted,
+  viewOnce,
+  viewedAt,
   replyTo,
   onReply,
   onDeleteForMe,
   onDeleteForAll,
   onForward,
   onShare,
+  onViewOnceOpen,
 }: MessageBubbleProps) {
   const [showMenu, setShowMenu] = useState(false);
+  const [revealed, setRevealed] = useState(false);
+
+  // View-once message that has already been viewed by the recipient
+  const isViewOnceConsumed = viewOnce && viewedAt;
+  // View-once message not yet opened by recipient (show blur for non-sender)
+  const isViewOnceHidden = viewOnce && !viewedAt && !isMine && !revealed;
+
+  // View-once consumed: show placeholder
+  if (isViewOnceConsumed) {
+    return (
+      <div className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
+        <div
+          className={`max-w-[80%] rounded-lg px-3 py-2 shadow-sm ${
+            isMine
+              ? "bg-chat-bubble-sent rounded-tr-none"
+              : "bg-chat-bubble-received rounded-tl-none"
+          } opacity-60`}
+        >
+          <p className="text-sm italic text-muted-foreground flex items-center gap-1">
+            <EyeOff className="h-3.5 w-3.5" /> Visualização única
+          </p>
+          <p className="text-[10px] mt-1 text-right text-muted-foreground">
+            {format(new Date(createdAt), "HH:mm")}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (deleted) {
     return (
@@ -61,6 +95,11 @@ export default function MessageBubble({
       </div>
     );
   }
+
+  const handleRevealViewOnce = () => {
+    setRevealed(true);
+    onViewOnceOpen?.(id);
+  };
 
   const renderReplyPreview = () => {
     if (!replyTo) return null;
@@ -144,12 +183,10 @@ export default function MessageBubble({
         }`}
         onContextMenu={(e) => {
           e.preventDefault();
-          setShowMenu(true);
-        }}
-        onClick={() => {
-          // On mobile, single tap can also toggle for convenience
+          if (!isViewOnceHidden) setShowMenu(true);
         }}
         onTouchStart={() => {
+          if (isViewOnceHidden) return;
           const timer = setTimeout(() => setShowMenu(true), 500);
           const clearTimer = () => clearTimeout(timer);
           document.addEventListener("touchend", clearTimer, { once: true });
@@ -157,7 +194,31 @@ export default function MessageBubble({
         }}
       >
         {renderReplyPreview()}
-        {renderContent()}
+
+        {isViewOnceHidden ? (
+          <button
+            onClick={handleRevealViewOnce}
+            className="flex flex-col items-center gap-1 py-3 px-6 w-full"
+          >
+            <Eye className="h-6 w-6 text-primary" />
+            <span className="text-xs font-medium text-primary">Toque para visualizar</span>
+            {viewOnce && (
+              <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                <EyeOff className="h-3 w-3" /> Visualização única
+              </span>
+            )}
+          </button>
+        ) : (
+          <>
+            {renderContent()}
+            {viewOnce && !isViewOnceConsumed && (
+              <p className="text-[10px] mt-0.5 text-muted-foreground flex items-center gap-0.5">
+                <EyeOff className="h-3 w-3" /> Visualização única
+              </p>
+            )}
+          </>
+        )}
+
         <p className="text-[10px] mt-1 text-right text-muted-foreground">
           {format(new Date(createdAt), "HH:mm")}
         </p>
