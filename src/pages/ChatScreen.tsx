@@ -6,8 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ArrowLeft, Send } from "lucide-react";
-import { format } from "date-fns";
 import { useNotificationSound, useBrowserNotifications } from "@/hooks/use-notifications";
+import MessageBubble from "@/components/chat/MessageBubble";
+import AttachmentPicker from "@/components/chat/AttachmentPicker";
+import AudioRecorder from "@/components/chat/AudioRecorder";
+import { toast } from "@/hooks/use-toast";
 
 interface Message {
   id: string;
@@ -58,7 +61,6 @@ export default function ChatScreen() {
             chatInfo?.name ?? "Nova mensagem",
             newMsg.encrypted_content ?? "Mídia"
           );
-          // Mark as read since user is viewing the chat
           supabase
             .from("messages")
             .update({ is_read: true })
@@ -114,13 +116,11 @@ export default function ChatScreen() {
 
   const loadMessages = async () => {
     if (!chatId) return;
-
     const { data } = await supabase
       .from("messages")
       .select("*")
       .eq("chat_id", chatId)
       .order("created_at", { ascending: true });
-
     if (data) setMessages(data);
   };
 
@@ -134,18 +134,90 @@ export default function ChatScreen() {
       .neq("sender_id", user.id);
   };
 
+  const uploadFile = async (file: Blob, ext: string): Promise<string | null> => {
+    if (!user) return null;
+    const fileName = `${user.id}/${chatId}/${Date.now()}.${ext}`;
+    const { error } = await supabase.storage
+      .from("media")
+      .upload(fileName, file);
+    if (error) {
+      console.error("Upload error:", error);
+      return null;
+    }
+    const { data: urlData } = supabase.storage
+      .from("media")
+      .getPublicUrl(fileName);
+    return urlData.publicUrl;
+  };
+
+  const getSignedUrl = async (path: string): Promise<string | null> => {
+    const { data } = await supabase.storage
+      .from("media")
+      .createSignedUrl(path, 3600);
+    return data?.signedUrl ?? null;
+  };
+
   const handleSend = async () => {
     if (!newMessage.trim() || !chatId || !user || sending) return;
-
     setSending(true);
     const content = newMessage.trim();
     setNewMessage("");
-
     await supabase.from("messages").insert({
       chat_id: chatId,
       sender_id: user.id,
       encrypted_content: content,
       message_type: "text",
+    });
+    setSending(false);
+  };
+
+  const handleFileSelected = async (file: File, type: "image" | "file") => {
+    if (!chatId || !user || sending) return;
+    setSending(true);
+
+    const ext = file.name.split(".").pop() ?? "bin";
+    const filePath = `${user.id}/${chatId}/${Date.now()}.${ext}`;
+
+    const { error } = await supabase.storage.from("media").upload(filePath, file);
+    if (error) {
+      toast({ title: "Erro ao enviar", description: error.message, variant: "destructive" });
+      setSending(false);
+      return;
+    }
+
+    const signedUrl = await getSignedUrl(filePath);
+
+    await supabase.from("messages").insert({
+      chat_id: chatId,
+      sender_id: user.id,
+      encrypted_content: type === "file" ? file.name : null,
+      message_type: type,
+      media_url: signedUrl,
+    });
+
+    setSending(false);
+  };
+
+  const handleAudioRecorded = async (blob: Blob) => {
+    if (!chatId || !user) return;
+    setSending(true);
+
+    const filePath = `${user.id}/${chatId}/${Date.now()}.webm`;
+
+    const { error } = await supabase.storage.from("media").upload(filePath, blob);
+    if (error) {
+      toast({ title: "Erro ao enviar áudio", description: error.message, variant: "destructive" });
+      setSending(false);
+      return;
+    }
+
+    const signedUrl = await getSignedUrl(filePath);
+
+    await supabase.from("messages").insert({
+      chat_id: chatId,
+      sender_id: user.id,
+      message_type: "audio",
+      media_url: signedUrl,
     });
 
     setSending(false);
@@ -185,48 +257,52 @@ export default function ChatScreen() {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-3 py-4 space-y-2">
-        {messages.map((msg) => {
-          const isMine = msg.sender_id === user?.id;
-          return (
-            <div
-              key={msg.id}
-              className={`flex ${isMine ? "justify-end" : "justify-start"}`}
-            >
-              <div
-                className={`max-w-[80%] rounded-lg px-3 py-2 shadow-sm ${
-                  isMine
-                    ? "bg-chat-bubble-sent rounded-tr-none"
-                    : "bg-chat-bubble-received rounded-tl-none"
-                }`}
-              >
-                <p className="text-sm break-words">{msg.encrypted_content}</p>
-                <p className={`text-[10px] mt-1 text-right text-muted-foreground`}>
-                  {format(new Date(msg.created_at), "HH:mm")}
-                </p>
-              </div>
-            </div>
-          );
-        })}
+        {messages.map((msg) => (
+          <MessageBubble
+            key={msg.id}
+            content={msg.encrypted_content}
+            mediaUrl={msg.media_url}
+            messageType={msg.message_type}
+            isMine={msg.sender_id === user?.id}
+            createdAt={msg.created_at}
+          />
+        ))}
         <div ref={messagesEndRef} />
       </div>
 
       {/* Input */}
-      <div className="flex items-center gap-2 border-t border-border bg-card px-3 py-2">
-        <Input
-          value={newMessage}
-          onChange={(e) => setNewMessage(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Mensagem"
-          className="flex-1 rounded-full"
-        />
-        <Button
-          size="icon"
-          onClick={handleSend}
-          disabled={!newMessage.trim() || sending}
-          className="rounded-full h-10 w-10"
-        >
-          <Send className="h-4 w-4" />
-        </Button>
+      <div className="flex items-center gap-1 border-t border-border bg-card px-2 py-2">
+        <AttachmentPicker onFileSelected={handleFileSelected} disabled={sending} />
+        {newMessage.trim() ? (
+          <>
+            <Input
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Mensagem"
+              className="flex-1 rounded-full"
+            />
+            <Button
+              size="icon"
+              onClick={handleSend}
+              disabled={!newMessage.trim() || sending}
+              className="rounded-full h-10 w-10"
+            >
+              <Send className="h-4 w-4" />
+            </Button>
+          </>
+        ) : (
+          <>
+            <Input
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Mensagem"
+              className="flex-1 rounded-full"
+            />
+            <AudioRecorder onRecorded={handleAudioRecorded} disabled={sending} />
+          </>
+        )}
       </div>
     </div>
   );
