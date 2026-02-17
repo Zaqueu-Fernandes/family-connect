@@ -76,72 +76,69 @@ export default function ChatList() {
 
     const chatIds = participantChats.map((p) => p.chat_id);
 
-    const { data: chatData } = await supabase
-      .from("chats")
-      .select("id, name, is_group")
-      .in("id", chatIds);
+    // Fetch all data in parallel instead of sequentially per chat
+    const [chatsRes, allParticipantsRes, allMessagesRes, unreadRes] = await Promise.all([
+      supabase.from("chats").select("id, name, is_group").in("id", chatIds),
+      supabase.from("chat_participants").select("chat_id, user_id").in("chat_id", chatIds).neq("user_id", user.id),
+      supabase.from("messages").select("chat_id, encrypted_content, created_at, sender_id, is_read").in("chat_id", chatIds).order("created_at", { ascending: false }),
+      supabase.from("messages").select("chat_id, id").in("chat_id", chatIds).eq("is_read", false).neq("sender_id", user.id),
+    ]);
 
-    if (!chatData) {
-      setLoading(false);
-      return;
+    const chatData = chatsRes.data;
+    if (!chatData) { setLoading(false); return; }
+
+    // Build lookup: last message per chat
+    const lastMsgMap = new Map<string, { encrypted_content: string | null; created_at: string }>();
+    for (const msg of allMessagesRes.data ?? []) {
+      if (!lastMsgMap.has(msg.chat_id)) {
+        lastMsgMap.set(msg.chat_id, { encrypted_content: msg.encrypted_content, created_at: msg.created_at });
+      }
     }
 
-    // Get last message for each chat
-    const enrichedChats: ChatItem[] = [];
+    // Build lookup: unread count per chat
+    const unreadMap = new Map<string, number>();
+    for (const msg of unreadRes.data ?? []) {
+      unreadMap.set(msg.chat_id, (unreadMap.get(msg.chat_id) ?? 0) + 1);
+    }
 
-    for (const chat of chatData) {
-      const { data: lastMsg } = await supabase
-        .from("messages")
-        .select("encrypted_content, created_at")
-        .eq("chat_id", chat.id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      let otherUserName = chat.name;
-      let avatarUrl: string | undefined;
-
-      if (!chat.is_group) {
-        const { data: participants } = await supabase
-          .from("chat_participants")
-          .select("user_id")
-          .eq("chat_id", chat.id)
-          .neq("user_id", user.id)
-          .limit(1);
-
-        if (participants?.[0]) {
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("name, avatar_url")
-            .eq("id", participants[0].user_id)
-            .single();
-
-          if (profile) {
-            otherUserName = profile.name;
-            avatarUrl = profile.avatar_url ?? undefined;
-          }
-        }
+    // Build lookup: other user per chat (for 1:1 chats)
+    const otherUserIds = new Set<string>();
+    const chatOtherUser = new Map<string, string>();
+    for (const p of allParticipantsRes.data ?? []) {
+      if (!chatOtherUser.has(p.chat_id)) {
+        chatOtherUser.set(p.chat_id, p.user_id);
+        otherUserIds.add(p.user_id);
       }
+    }
 
-      // Count unread messages
-      const { count: unreadCount } = await supabase
-        .from("messages")
-        .select("id", { count: "exact", head: true })
-        .eq("chat_id", chat.id)
-        .eq("is_read", false)
-        .neq("sender_id", user.id);
+    // Fetch all needed profiles in one query
+    let profileMap = new Map<string, { name: string; avatar_url: string | null }>();
+    if (otherUserIds.size > 0) {
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, name, avatar_url")
+        .in("id", [...otherUserIds]);
+      for (const p of profiles ?? []) {
+        profileMap.set(p.id, { name: p.name, avatar_url: p.avatar_url });
+      }
+    }
 
-      enrichedChats.push({
+    const enrichedChats: ChatItem[] = chatData.map((chat) => {
+      const lastMsg = lastMsgMap.get(chat.id);
+      const otherUserId = chatOtherUser.get(chat.id);
+      const profile = otherUserId ? profileMap.get(otherUserId) : undefined;
+
+      return {
         id: chat.id,
         name: chat.name,
         is_group: chat.is_group,
         last_message: lastMsg?.encrypted_content ?? undefined,
         last_message_time: lastMsg?.created_at ?? undefined,
-        avatar_url: avatarUrl,
-        other_user_name: otherUserName ?? undefined,
-        unread_count: unreadCount ?? 0,
-      });
-    }
+        avatar_url: (!chat.is_group && profile?.avatar_url) ? profile.avatar_url : undefined,
+        other_user_name: !chat.is_group ? profile?.name ?? chat.name ?? undefined : undefined,
+        unread_count: unreadMap.get(chat.id) ?? 0,
+      };
+    });
 
     enrichedChats.sort((a, b) => {
       if (!a.last_message_time) return 1;
