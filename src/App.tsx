@@ -4,9 +4,13 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import SplashScreen from "@/components/SplashScreen";
 import InstallPrompt from "@/components/InstallPrompt";
+import IncomingCallDialog from "@/components/call/IncomingCallDialog";
+import ActiveCallOverlay from "@/components/call/ActiveCallOverlay";
+import { useIncomingCalls } from "@/hooks/use-incoming-calls";
+import { useWebRTC } from "@/hooks/use-webrtc";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -43,6 +47,69 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function IncomingCallHandler() {
+  const { user } = useAuth();
+  const { incomingCall, dismissIncoming } = useIncomingCalls(user?.id);
+  const remoteAudioRef = useRef<HTMLAudioElement>(null);
+
+  const handleRemoteStream = useCallback((stream: MediaStream) => {
+    if (remoteAudioRef.current) {
+      remoteAudioRef.current.srcObject = stream;
+    }
+  }, []);
+
+  const handleCallEnded = useCallback(() => {
+    dismissIncoming();
+  }, [dismissIncoming]);
+
+  const {
+    callStatus,
+    answerCall,
+    endCall,
+    rejectCall,
+  } = useWebRTC({
+    userId: user?.id ?? "",
+    onRemoteStream: handleRemoteStream,
+    onCallEnded: handleCallEnded,
+  });
+
+  const handleAccept = () => {
+    if (incomingCall) {
+      answerCall(incomingCall.id);
+      dismissIncoming();
+    }
+  };
+
+  const handleReject = () => {
+    if (incomingCall) {
+      rejectCall(incomingCall.id);
+      dismissIncoming();
+    }
+  };
+
+  return (
+    <>
+      {incomingCall && callStatus === "idle" && (
+        <IncomingCallDialog
+          callerName={incomingCall.callerName}
+          callerAvatar={incomingCall.callerAvatar}
+          onAccept={handleAccept}
+          onReject={handleReject}
+        />
+      )}
+      {callStatus !== "idle" && (
+        <ActiveCallOverlay
+          peerName={incomingCall?.callerName ?? "Usuário"}
+          peerAvatar={incomingCall?.callerAvatar}
+          status={callStatus as "calling" | "ringing" | "answered"}
+          onHangUp={() => endCall()}
+        />
+      )}
+      <audio ref={remoteAudioRef} autoPlay />
+    </>
+  );
+}
+
 function AppContent() {
   const [showSplash, setShowSplash] = useState(true);
 
@@ -50,6 +117,7 @@ function AppContent() {
     <>
       {showSplash && <SplashScreen onFinish={() => setShowSplash(false)} />}
       <InstallPrompt />
+      <IncomingCallHandler />
       <Routes>
         <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
         <Route path="/signup" element={<PublicRoute><Signup /></PublicRoute>} />
