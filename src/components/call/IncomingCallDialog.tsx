@@ -2,6 +2,7 @@ import { Phone, PhoneOff, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { CallMode } from "@/hooks/use-webrtc";
+import { useRingtone } from "@/hooks/use-ringtone";
 
 interface IncomingCallDialogProps {
   callerName: string;
@@ -16,6 +17,9 @@ export default function IncomingCallDialog({
   onAccept,
   onReject,
 }: IncomingCallDialogProps) {
+  // Play incoming ringtone while dialog is shown
+  useRingtone(true, "incoming");
+
   const initials = callerName
     .split(" ")
     .map((n) => n[0])
