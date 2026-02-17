@@ -9,6 +9,7 @@ import { MessageCircle, Phone, User, Search, Plus, Shield } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useNotificationSound, useBrowserNotifications } from "@/hooks/use-notifications";
+import { toast } from "sonner";
 
 interface ChatItem {
   id: string;
@@ -46,9 +47,17 @@ export default function ChatList() {
     const channel = supabase
       .channel("chat-list-updates")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
-        const msg = payload.new as { sender_id: string; encrypted_content?: string };
+        const msg = payload.new as { sender_id: string; encrypted_content?: string; chat_id?: string };
         if (msg.sender_id !== user.id) {
           playSound();
+          // Internal toast pop-up
+          toast("Nova mensagem", {
+            description: msg.encrypted_content ?? "Mídia recebida",
+            action: msg.chat_id ? {
+              label: "Abrir",
+              onClick: () => navigate(`/chat/${msg.chat_id}`),
+            } : undefined,
+          });
           showNotification("WhatsZak", msg.encrypted_content ?? "Nova mensagem", () => {
             window.focus();
           });

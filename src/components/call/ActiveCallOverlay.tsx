@@ -3,6 +3,7 @@ import { PhoneOff, Mic, MicOff, Video, VideoOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { CallMode } from "@/hooks/use-webrtc";
+import { useRingtone } from "@/hooks/use-ringtone";
 
 interface ActiveCallOverlayProps {
   peerName: string;
@@ -28,6 +29,9 @@ export default function ActiveCallOverlay({
   const [duration, setDuration] = useState(0);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
+
+  // Play outgoing ringtone while calling/ringing (stops when answered)
+  useRingtone(status === "calling" || status === "ringing", "outgoing");
 
   useEffect(() => {
     if (status !== "answered") return;
