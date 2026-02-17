@@ -40,6 +40,7 @@ export default function ChatScreen() {
     if (!chatId || !user) return;
     loadChatInfo();
     loadMessages();
+    markAsRead();
 
     const channel = supabase
       .channel(`chat-${chatId}`)
@@ -57,6 +58,12 @@ export default function ChatScreen() {
             chatInfo?.name ?? "Nova mensagem",
             newMsg.encrypted_content ?? "Mídia"
           );
+          // Mark as read since user is viewing the chat
+          supabase
+            .from("messages")
+            .update({ is_read: true })
+            .eq("id", newMsg.id)
+            .then();
         }
       })
       .subscribe();
@@ -115,6 +122,16 @@ export default function ChatScreen() {
       .order("created_at", { ascending: true });
 
     if (data) setMessages(data);
+  };
+
+  const markAsRead = async () => {
+    if (!chatId || !user) return;
+    await supabase
+      .from("messages")
+      .update({ is_read: true })
+      .eq("chat_id", chatId)
+      .eq("is_read", false)
+      .neq("sender_id", user.id);
   };
 
   const handleSend = async () => {

@@ -18,6 +18,7 @@ interface ChatItem {
   last_message_time?: string;
   avatar_url?: string;
   other_user_name?: string;
+  unread_count: number;
 }
 
 export default function ChatList() {
@@ -122,6 +123,14 @@ export default function ChatList() {
         }
       }
 
+      // Count unread messages
+      const { count: unreadCount } = await supabase
+        .from("messages")
+        .select("id", { count: "exact", head: true })
+        .eq("chat_id", chat.id)
+        .eq("is_read", false)
+        .neq("sender_id", user.id);
+
       enrichedChats.push({
         id: chat.id,
         name: chat.name,
@@ -130,6 +139,7 @@ export default function ChatList() {
         last_message_time: lastMsg?.created_at ?? undefined,
         avatar_url: avatarUrl,
         other_user_name: otherUserName ?? undefined,
+        unread_count: unreadCount ?? 0,
       });
     }
 
@@ -209,17 +219,24 @@ export default function ChatList() {
                 <div className="flex-1 overflow-hidden">
                   <div className="flex items-center justify-between">
                     <p className="font-semibold truncate">{chat.other_user_name ?? chat.name ?? "Chat"}</p>
-                    {chat.last_message_time && (
-                      <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
-                        {formatDistanceToNow(new Date(chat.last_message_time), {
-                          addSuffix: false,
-                          locale: ptBR,
-                        })}
-                      </span>
-                    )}
+                    <div className="flex flex-col items-end gap-1 ml-2">
+                      {chat.last_message_time && (
+                        <span className={`text-xs whitespace-nowrap ${chat.unread_count > 0 ? 'text-primary font-semibold' : 'text-muted-foreground'}`}>
+                          {formatDistanceToNow(new Date(chat.last_message_time), {
+                            addSuffix: false,
+                            locale: ptBR,
+                          })}
+                        </span>
+                      )}
+                      {chat.unread_count > 0 && (
+                        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-bold text-primary-foreground">
+                          {chat.unread_count}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   {chat.last_message && (
-                    <p className="text-sm text-muted-foreground truncate">{chat.last_message}</p>
+                    <p className={`text-sm truncate ${chat.unread_count > 0 ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>{chat.last_message}</p>
                   )}
                 </div>
               </button>
