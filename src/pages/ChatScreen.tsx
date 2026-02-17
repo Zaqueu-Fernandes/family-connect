@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ArrowLeft, Send } from "lucide-react";
 import { format } from "date-fns";
+import { useNotificationSound, useBrowserNotifications } from "@/hooks/use-notifications";
 
 interface Message {
   id: string;
@@ -32,6 +33,8 @@ export default function ChatScreen() {
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const playSound = useNotificationSound();
+  const { showNotification } = useBrowserNotifications();
 
   useEffect(() => {
     if (!chatId || !user) return;
@@ -46,7 +49,15 @@ export default function ChatScreen() {
         table: "messages",
         filter: `chat_id=eq.${chatId}`,
       }, (payload) => {
-        setMessages((prev) => [...prev, payload.new as Message]);
+        const newMsg = payload.new as Message;
+        setMessages((prev) => [...prev, newMsg]);
+        if (newMsg.sender_id !== user?.id) {
+          playSound();
+          showNotification(
+            chatInfo?.name ?? "Nova mensagem",
+            newMsg.encrypted_content ?? "Mídia"
+          );
+        }
       })
       .subscribe();
 
