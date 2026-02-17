@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ArrowLeft, Send, Phone, Video, X, Eye, EyeOff } from "lucide-react";
 import { useNotificationSound, useBrowserNotifications } from "@/hooks/use-notifications";
+import { sendPushToUser } from "@/lib/push";
 import MessageBubble from "@/components/chat/MessageBubble";
 import AttachmentPicker from "@/components/chat/AttachmentPicker";
 import AudioRecorder from "@/components/chat/AudioRecorder";
@@ -202,6 +203,25 @@ export default function ChatScreen() {
     await supabase.rpc("mark_messages_as_read", { _chat_id: chatId });
   };
 
+  const notifyOtherParticipants = async (preview: string) => {
+    if (!chatId || !user) return;
+    const { data: participants } = await supabase
+      .from("chat_participants")
+      .select("user_id")
+      .eq("chat_id", chatId)
+      .neq("user_id", user.id);
+    if (!participants) return;
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("name")
+      .eq("id", user.id)
+      .single();
+    const senderName = profile?.name ?? "Nova mensagem";
+    for (const p of participants) {
+      sendPushToUser(p.user_id, senderName, preview, { chat_id: chatId });
+    }
+  };
+
   const getSignedUrl = async (path: string): Promise<string | null> => {
     const { data } = await supabase.storage
       .from("media")
@@ -226,6 +246,7 @@ export default function ChatScreen() {
       reply_to_id: replyId,
       view_once: isViewOnce,
     });
+    notifyOtherParticipants(content);
     setSending(false);
   };
 
@@ -252,7 +273,7 @@ export default function ChatScreen() {
       message_type: type,
       media_url: signedUrl,
     });
-
+    notifyOtherParticipants(type === "image" ? "📷 Imagem" : "📎 Arquivo");
     setSending(false);
   };
 
@@ -277,7 +298,7 @@ export default function ChatScreen() {
       message_type: "audio",
       media_url: signedUrl,
     });
-
+    notifyOtherParticipants("🎵 Áudio");
     setSending(false);
   };
 

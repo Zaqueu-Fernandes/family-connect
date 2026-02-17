@@ -12,6 +12,7 @@ import IncomingCallDialog from "@/components/call/IncomingCallDialog";
 import ActiveCallOverlay from "@/components/call/ActiveCallOverlay";
 import { useIncomingCalls } from "@/hooks/use-incoming-calls";
 import { useWebRTC } from "@/hooks/use-webrtc";
+import { usePushNotifications } from "@/hooks/use-push-notifications";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -52,6 +53,7 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 function IncomingCallHandler() {
   const { user } = useAuth();
   const { incomingCall, dismissIncoming } = useIncomingCalls(user?.id);
+  usePushNotifications(user?.id);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
 
   const handleRemoteStream = useCallback((stream: MediaStream) => {
