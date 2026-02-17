@@ -164,6 +164,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_private_chat: { Args: { _other_user_id: string }; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
