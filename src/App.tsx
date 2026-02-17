@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { useState } from "react";
 import SplashScreen from "@/components/SplashScreen";
+import InstallPrompt from "@/components/InstallPrompt";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -48,6 +49,7 @@ function AppContent() {
   return (
     <>
       {showSplash && <SplashScreen onFinish={() => setShowSplash(false)} />}
+      <InstallPrompt />
       <Routes>
         <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
         <Route path="/signup" element={<PublicRoute><Signup /></PublicRoute>} />
