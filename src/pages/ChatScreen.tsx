@@ -5,12 +5,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ArrowLeft, Send, Phone, Video } from "lucide-react";
+import { ArrowLeft, Send, Phone, Video, X } from "lucide-react";
 import { useNotificationSound, useBrowserNotifications } from "@/hooks/use-notifications";
 import MessageBubble from "@/components/chat/MessageBubble";
 import AttachmentPicker from "@/components/chat/AttachmentPicker";
 import AudioRecorder from "@/components/chat/AudioRecorder";
 import ActiveCallOverlay from "@/components/call/ActiveCallOverlay";
+import ForwardMessageDialog from "@/components/chat/ForwardMessageDialog";
 import { useWebRTC } from "@/hooks/use-webrtc";
 import type { CallMode } from "@/hooks/use-webrtc";
 import { toast } from "@/hooks/use-toast";
@@ -22,6 +23,8 @@ interface Message {
   message_type: string;
   media_url: string | null;
   created_at: string;
+  deleted_at: string | null;
+  reply_to_id: string | null;
 }
 
 interface ChatInfo {
@@ -38,6 +41,10 @@ export default function ChatScreen() {
   const [newMessage, setNewMessage] = useState("");
   const [chatInfo, setChatInfo] = useState<ChatInfo | null>(null);
   const [sending, setSending] = useState(false);
+  const [deletedForMe, setDeletedForMe] = useState<Set<string>>(new Set());
+  const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+  const [forwardingMsg, setForwardingMsg] = useState<Message | null>(null);
+  const [senderNames, setSenderNames] = useState<Record<string, string>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const navigate = useNavigate();
@@ -73,6 +80,7 @@ export default function ChatScreen() {
     if (!chatId || !user) return;
     loadChatInfo();
     loadMessages();
+    loadDeletedForMe();
     markAsRead();
 
     const channel = supabase
@@ -98,6 +106,17 @@ export default function ChatScreen() {
             .then();
         }
       })
+      .on("postgres_changes", {
+        event: "UPDATE",
+        schema: "public",
+        table: "messages",
+        filter: `chat_id=eq.${chatId}`,
+      }, (payload) => {
+        const updated = payload.new as Message;
+        setMessages((prev) =>
+          prev.map((m) => (m.id === updated.id ? updated : m))
+        );
+      })
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
@@ -106,6 +125,17 @@ export default function ChatScreen() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  const loadDeletedForMe = async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from("message_deletions")
+      .select("message_id")
+      .eq("user_id", user.id);
+    if (data) {
+      setDeletedForMe(new Set(data.map((d) => d.message_id)));
+    }
+  };
 
   const loadChatInfo = async () => {
     if (!chatId || !user) return;
@@ -152,7 +182,20 @@ export default function ChatScreen() {
       .select("*")
       .eq("chat_id", chatId)
       .order("created_at", { ascending: true });
-    if (data) setMessages(data);
+    if (data) {
+      setMessages(data as Message[]);
+      // Load sender names for reply previews
+      const senderIds = [...new Set(data.map((m) => m.sender_id))];
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, name")
+        .in("id", senderIds);
+      if (profiles) {
+        const names: Record<string, string> = {};
+        profiles.forEach((p) => (names[p.id] = p.name));
+        setSenderNames(names);
+      }
+    }
   };
 
   const markAsRead = async () => {
@@ -163,22 +206,6 @@ export default function ChatScreen() {
       .eq("chat_id", chatId)
       .eq("is_read", false)
       .neq("sender_id", user.id);
-  };
-
-  const uploadFile = async (file: Blob, ext: string): Promise<string | null> => {
-    if (!user) return null;
-    const fileName = `${user.id}/${chatId}/${Date.now()}.${ext}`;
-    const { error } = await supabase.storage
-      .from("media")
-      .upload(fileName, file);
-    if (error) {
-      console.error("Upload error:", error);
-      return null;
-    }
-    const { data: urlData } = supabase.storage
-      .from("media")
-      .getPublicUrl(fileName);
-    return urlData.publicUrl;
   };
 
   const getSignedUrl = async (path: string): Promise<string | null> => {
@@ -193,11 +220,14 @@ export default function ChatScreen() {
     setSending(true);
     const content = newMessage.trim();
     setNewMessage("");
+    const replyId = replyingTo?.id ?? null;
+    setReplyingTo(null);
     await supabase.from("messages").insert({
       chat_id: chatId,
       sender_id: user.id,
       encrypted_content: content,
       message_type: "text",
+      reply_to_id: replyId,
     });
     setSending(false);
   };
@@ -254,11 +284,76 @@ export default function ChatScreen() {
     setSending(false);
   };
 
+  const handleDeleteForMe = async (msgId: string) => {
+    if (!user) return;
+    await supabase.from("message_deletions").insert({
+      message_id: msgId,
+      user_id: user.id,
+    });
+    setDeletedForMe((prev) => new Set(prev).add(msgId));
+    toast({ title: "Mensagem apagada para você" });
+  };
+
+  const handleDeleteForAll = async (msgId: string) => {
+    await supabase
+      .from("messages")
+      .update({ deleted_at: new Date().toISOString(), encrypted_content: null, media_url: null })
+      .eq("id", msgId);
+    toast({ title: "Mensagem apagada para todos" });
+  };
+
+  const handleReply = (msgId: string) => {
+    const msg = messages.find((m) => m.id === msgId);
+    if (msg) setReplyingTo(msg);
+  };
+
+  const handleForward = (msgId: string) => {
+    const msg = messages.find((m) => m.id === msgId);
+    if (msg) setForwardingMsg(msg);
+  };
+
+  const handleShare = async (msgId: string) => {
+    const msg = messages.find((m) => m.id === msgId);
+    if (!msg) return;
+
+    const text =
+      msg.message_type === "text"
+        ? msg.encrypted_content ?? ""
+        : msg.media_url ?? msg.encrypted_content ?? "";
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: "Mensagem",
+          text,
+          url: msg.media_url ?? undefined,
+        });
+      } catch {
+        // user cancelled
+      }
+    } else {
+      await navigator.clipboard.writeText(text);
+      toast({ title: "Copiado para a área de transferência" });
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
+  };
+
+  const getReplyInfo = (msg: Message) => {
+    if (!msg.reply_to_id) return null;
+    const replied = messages.find((m) => m.id === msg.reply_to_id);
+    if (!replied) return null;
+    return {
+      id: replied.id,
+      content: replied.encrypted_content,
+      messageType: replied.message_type,
+      senderName: senderNames[replied.sender_id] ?? "Usuário",
+    };
   };
 
   const initials = chatInfo?.name
@@ -267,6 +362,8 @@ export default function ChatScreen() {
     .join("")
     .toUpperCase()
     .slice(0, 2) ?? "?";
+
+  const visibleMessages = messages.filter((m) => !deletedForMe.has(m.id));
 
   return (
     <div className="flex min-h-screen flex-col bg-chat-bg">
@@ -321,20 +418,56 @@ export default function ChatScreen() {
         />
       )}
 
+      {/* Forward dialog */}
+      {forwardingMsg && (
+        <ForwardMessageDialog
+          message={forwardingMsg}
+          onClose={() => setForwardingMsg(null)}
+        />
+      )}
+
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-3 py-4 space-y-2">
-        {messages.map((msg) => (
+        {visibleMessages.map((msg) => (
           <MessageBubble
             key={msg.id}
+            id={msg.id}
             content={msg.encrypted_content}
             mediaUrl={msg.media_url}
             messageType={msg.message_type}
             isMine={msg.sender_id === user?.id}
             createdAt={msg.created_at}
+            deleted={!!msg.deleted_at}
+            replyTo={getReplyInfo(msg)}
+            onReply={handleReply}
+            onDeleteForMe={handleDeleteForMe}
+            onDeleteForAll={handleDeleteForAll}
+            onForward={handleForward}
+            onShare={handleShare}
           />
         ))}
         <div ref={messagesEndRef} />
       </div>
+
+      {/* Reply preview */}
+      {replyingTo && (
+        <div className="flex items-center gap-2 bg-muted px-3 py-2 border-t border-border">
+          <div className="flex-1 border-l-2 border-primary pl-2">
+            <p className="text-xs font-semibold text-primary">
+              {replyingTo.sender_id === user?.id ? "Você" : senderNames[replyingTo.sender_id] ?? "Usuário"}
+            </p>
+            <p className="text-xs text-muted-foreground truncate">
+              {replyingTo.message_type === "audio" ? "🎵 Áudio" :
+               replyingTo.message_type === "image" ? "📷 Imagem" :
+               replyingTo.message_type === "file" ? "📎 Arquivo" :
+               replyingTo.encrypted_content ?? ""}
+            </p>
+          </div>
+          <Button variant="ghost" size="icon" onClick={() => setReplyingTo(null)} className="h-8 w-8">
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
 
       {/* Input */}
       <div className="flex items-center gap-1 border-t border-border bg-card px-2 py-2">
