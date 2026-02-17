@@ -140,9 +140,20 @@ Deno.serve(async (req) => {
       const message = {
         message: {
           token,
-          notification: { title, body },
-          data: pushData || {},
+          data: {
+            ...(pushData || {}),
+            title,
+            body,
+          },
           webpush: {
+            notification: {
+              title,
+              body,
+              icon: "/pwa-192x192.png",
+              badge: "/pwa-192x192.png",
+              tag: "whatzak-push",
+              renotify: "true",
+            },
             fcm_options: { link: "/" },
           },
         },

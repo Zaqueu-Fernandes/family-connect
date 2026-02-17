@@ -14,7 +14,9 @@ firebase.initializeApp({
 const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage((payload) => {
-  const { title, body } = payload.notification || {};
+  // Data-only messages: extract title/body from data
+  const title = payload.data?.title || payload.notification?.title;
+  const body = payload.data?.body || payload.notification?.body;
   if (title) {
     self.registration.showNotification(title, {
       body: body || "",
@@ -22,6 +24,26 @@ messaging.onBackgroundMessage((payload) => {
       badge: "/pwa-192x192.png",
       tag: "whatzak-push",
       renotify: true,
+      data: payload.data || {},
     });
   }
+});
+
+// Handle notification click - open/focus the app
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const chatId = event.notification.data?.chat_id;
+  const urlToOpen = chatId ? `/chat/${chatId}` : "/";
+
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if (client.url.includes(self.location.origin) && "focus" in client) {
+          client.navigate(urlToOpen);
+          return client.focus();
+        }
+      }
+      return self.clients.openWindow(urlToOpen);
+    })
+  );
 });
