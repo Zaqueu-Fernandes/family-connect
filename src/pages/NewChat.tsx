@@ -82,11 +82,9 @@ export default function NewChat() {
       return;
     }
 
-    // Add both participants
-    await supabase.from("chat_participants").insert([
-      { chat_id: newChat.id, user_id: user.id },
-      { chat_id: newChat.id, user_id: otherUserId },
-    ]);
+    // Add current user first so RLS allows adding the other
+    await supabase.from("chat_participants").insert({ chat_id: newChat.id, user_id: user.id });
+    await supabase.from("chat_participants").insert({ chat_id: newChat.id, user_id: otherUserId });
 
     navigate(`/chat/${newChat.id}`);
   };
