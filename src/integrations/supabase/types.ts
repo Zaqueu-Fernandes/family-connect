@@ -294,6 +294,7 @@ export type Database = {
         Args: { _chat_id: string; _user_id: string }
         Returns: boolean
       }
+      mark_messages_as_read: { Args: { _chat_id: string }; Returns: undefined }
     }
     Enums: {
       app_role: "admin" | "moderator" | "user"

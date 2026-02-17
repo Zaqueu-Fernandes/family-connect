@@ -99,11 +99,7 @@ export default function ChatScreen() {
             chatInfo?.name ?? "Nova mensagem",
             newMsg.encrypted_content ?? "Mídia"
           );
-          supabase
-            .from("messages")
-            .update({ is_read: true })
-            .eq("id", newMsg.id)
-            .then();
+          supabase.rpc("mark_messages_as_read", { _chat_id: chatId }).then();
         }
       })
       .on("postgres_changes", {
@@ -200,12 +196,7 @@ export default function ChatScreen() {
 
   const markAsRead = async () => {
     if (!chatId || !user) return;
-    await supabase
-      .from("messages")
-      .update({ is_read: true })
-      .eq("chat_id", chatId)
-      .eq("is_read", false)
-      .neq("sender_id", user.id);
+    await supabase.rpc("mark_messages_as_read", { _chat_id: chatId });
   };
 
   const getSignedUrl = async (path: string): Promise<string | null> => {

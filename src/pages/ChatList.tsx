@@ -257,7 +257,7 @@ export default function ChatList() {
           <MessageCircle className="h-5 w-5" />
           <span className="text-xs">Chats</span>
         </Button>
-        <Button variant="ghost" className="flex flex-col items-center gap-1 h-auto text-muted-foreground" disabled>
+        <Button variant="ghost" className="flex flex-col items-center gap-1 h-auto text-muted-foreground" onClick={() => navigate("/calls")}>
           <Phone className="h-5 w-5" />
           <span className="text-xs">Chamadas</span>
         </Button>
