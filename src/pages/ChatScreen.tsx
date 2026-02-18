@@ -205,18 +205,23 @@ export default function ChatScreen() {
 
   const notifyOtherParticipants = async (preview: string) => {
     if (!chatId || !user) return;
+    console.log("[PUSH] notifyOtherParticipants called for chat:", chatId);
     const { data: participants } = await supabase
       .from("chat_participants")
       .select("user_id")
       .eq("chat_id", chatId)
       .neq("user_id", user.id);
-    if (!participants) return;
+    if (!participants || participants.length === 0) {
+      console.log("[PUSH] No other participants found");
+      return;
+    }
     const { data: profile } = await supabase
       .from("profiles")
       .select("name")
       .eq("id", user.id)
       .single();
     const senderName = profile?.name ?? "Nova mensagem";
+    console.log("[PUSH] Sending to", participants.length, "participants as", senderName);
     for (const p of participants) {
       sendPushToUser(p.user_id, senderName, preview, { chat_id: chatId });
     }

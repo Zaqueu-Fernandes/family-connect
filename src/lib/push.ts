@@ -2,7 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 /**
  * Send a push notification to a recipient via the send-push edge function.
- * Fires and forgets — errors are logged but don't block the caller.
+ * Logs results for debugging.
  */
 export async function sendPushToUser(
   recipientId: string,
@@ -11,10 +11,18 @@ export async function sendPushToUser(
   data?: Record<string, string>
 ) {
   try {
-    await supabase.functions.invoke("send-push", {
+    console.log("[PUSH] Sending push to", recipientId, "title:", title);
+    const { data: responseData, error } = await supabase.functions.invoke("send-push", {
       body: { recipient_id: recipientId, title, body, data },
     });
+
+    if (error) {
+      console.error("[PUSH] Edge function error:", error);
+      return;
+    }
+
+    console.log("[PUSH] Response:", responseData);
   } catch (err) {
-    console.error("Push notification failed:", err);
+    console.error("[PUSH] Push notification failed:", err);
   }
 }
