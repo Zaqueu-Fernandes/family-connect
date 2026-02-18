@@ -32,7 +32,8 @@ messaging.onBackgroundMessage((payload) => {
 // Handle notification click - open/focus the app
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const chatId = event.notification.data?.chat_id;
+  const data = event.notification.data || {};
+  const chatId = data.chat_id;
   const urlToOpen = chatId ? `/chat/${chatId}` : "/";
 
   event.waitUntil(

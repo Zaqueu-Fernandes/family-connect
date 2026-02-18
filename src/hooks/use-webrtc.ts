@@ -1,5 +1,6 @@
 import { useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { sendPushToUser } from "@/lib/push";
 
 const ICE_SERVERS: RTCConfiguration = {
   iceServers: [
@@ -147,6 +148,21 @@ export function useWebRTC({ userId, onRemoteStream, onCallEnded }: UseWebRTCOpti
 
       const currentCallId = call.id;
       setCallId(currentCallId);
+
+      // Send push notification to callee for when app is minimized/closed
+      const { data: callerProfile } = await supabase
+        .from("profiles")
+        .select("name")
+        .eq("id", userId)
+        .single();
+      const callerName = callerProfile?.name ?? "Alguém";
+      const callType = mode === "video" ? "vídeo" : "áudio";
+      sendPushToUser(
+        calleeId,
+        `📞 ${callerName}`,
+        `Chamada de ${callType} recebida`,
+        { chat_id: chatId, call_id: currentCallId, type: "call" }
+      ).catch((err) => console.error("[PUSH] call push error:", err));
 
       const pc = createPeerConnection(currentCallId);
       stream.getTracks().forEach((track) => pc.addTrack(track, stream));
