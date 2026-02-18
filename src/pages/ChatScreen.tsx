@@ -204,26 +204,39 @@ export default function ChatScreen() {
   };
 
   const notifyOtherParticipants = async (preview: string) => {
-    if (!chatId || !user) return;
-    console.log("[PUSH] notifyOtherParticipants called for chat:", chatId);
-    const { data: participants } = await supabase
-      .from("chat_participants")
-      .select("user_id")
-      .eq("chat_id", chatId)
-      .neq("user_id", user.id);
-    if (!participants || participants.length === 0) {
-      console.log("[PUSH] No other participants found");
+    if (!chatId || !user) {
+      console.log("[PUSH] notifyOtherParticipants skipped: no chatId or user");
       return;
     }
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("name")
-      .eq("id", user.id)
-      .single();
-    const senderName = profile?.name ?? "Nova mensagem";
-    console.log("[PUSH] Sending to", participants.length, "participants as", senderName);
-    for (const p of participants) {
-      sendPushToUser(p.user_id, senderName, preview, { chat_id: chatId });
+    try {
+      console.log("[PUSH] notifyOtherParticipants called for chat:", chatId);
+      const { data: participants, error: partError } = await supabase
+        .from("chat_participants")
+        .select("user_id")
+        .eq("chat_id", chatId)
+        .neq("user_id", user.id);
+      if (partError) {
+        console.error("[PUSH] Error loading participants:", partError);
+        return;
+      }
+      if (!participants || participants.length === 0) {
+        console.log("[PUSH] No other participants found");
+        return;
+      }
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("name")
+        .eq("id", user.id)
+        .single();
+      const senderName = profile?.name ?? "Nova mensagem";
+      console.log("[PUSH] Sending to", participants.length, "participants as", senderName);
+      for (const p of participants) {
+        // Await each push to ensure errors are caught
+        await sendPushToUser(p.user_id, senderName, preview, { chat_id: chatId });
+      }
+      console.log("[PUSH] All pushes sent");
+    } catch (err: any) {
+      console.error("[PUSH] notifyOtherParticipants error:", err?.message || err);
     }
   };
 
@@ -251,7 +264,8 @@ export default function ChatScreen() {
       reply_to_id: replyId,
       view_once: isViewOnce,
     });
-    notifyOtherParticipants(content);
+    // Fire push notification (don't block UI but log errors)
+    notifyOtherParticipants(content).catch((err) => console.error("[PUSH] notify error:", err));
     setSending(false);
   };
 
