@@ -36,10 +36,12 @@ export async function requestFCMToken(): Promise<string | null> {
     const permission = await Notification.requestPermission();
     if (permission !== "granted") return null;
 
-    // Register or get existing Firebase messaging SW
-    let registration = await navigator.serviceWorker.getRegistration("/firebase-messaging-sw.js");
+    // Register or get existing Firebase messaging SW (respect base URL)
+    const base = import.meta.env.BASE_URL || "/";
+    const swPath = `${base}firebase-messaging-sw.js`.replace("//", "/");
+    let registration = await navigator.serviceWorker.getRegistration(swPath);
     if (!registration) {
-      registration = await navigator.serviceWorker.register("/firebase-messaging-sw.js");
+      registration = await navigator.serviceWorker.register(swPath);
     }
     
     const token = await getToken(m, {
