@@ -73,8 +73,10 @@ Deno.serve(async (req) => {
   }
 
   try {
+    console.log("[send-push] Request received", req.method);
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
+      console.log("[send-push] No auth header");
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -98,6 +100,7 @@ Deno.serve(async (req) => {
       });
     }
 
+    console.log("[send-push] User verified:", claimsData.user.id);
     const { recipient_id, title, body, data: pushData } = await req.json();
 
     if (!recipient_id || !title || !body) {
@@ -112,10 +115,13 @@ Deno.serve(async (req) => {
 
     // Get recipient's push tokens using service role
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
-    const { data: tokens } = await adminClient
+    console.log("[send-push] Looking up tokens for:", recipient_id);
+    const { data: tokens, error: tokensError } = await adminClient
       .from("push_tokens")
       .select("token")
       .eq("user_id", recipient_id);
+
+    console.log("[send-push] Tokens found:", tokens?.length, "error:", tokensError?.message);
 
     if (!tokens || tokens.length === 0) {
       return new Response(
