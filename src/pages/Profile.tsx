@@ -7,8 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Camera, ArrowLeft, LogOut } from "lucide-react";
+import { Camera, ArrowLeft, LogOut, Bell, BellRing } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { requestFCMToken } from "@/lib/firebase";
+import { sendPushToUser } from "@/lib/push";
 
 export default function Profile() {
   const { user, signOut } = useAuth();
@@ -126,6 +128,39 @@ export default function Profile() {
             </div>
             <Button onClick={handleSave} className="w-full" disabled={loading}>
               {loading ? "Salvando..." : "Salvar"}
+            </Button>
+            <Button variant="outline" className="w-full" onClick={async () => {
+              try {
+                const perm = Notification.permission;
+                toast({ title: `Permissão atual: ${perm}` });
+                if (perm === "default") {
+                  const result = await Notification.requestPermission();
+                  toast({ title: `Resultado: ${result}` });
+                }
+                const token = await requestFCMToken();
+                if (token) {
+                  toast({ title: "✅ Token FCM obtido!", description: token.substring(0, 30) + "..." });
+                } else {
+                  toast({ title: "❌ Token não obtido", description: "Verifique permissão ou suporte do navegador", variant: "destructive" });
+                }
+              } catch (err: any) {
+                toast({ title: "Erro", description: err.message, variant: "destructive" });
+              }
+            }}>
+              <Bell className="mr-2 h-4 w-4" />
+              Testar Permissão de Notificação
+            </Button>
+            <Button variant="outline" className="w-full" onClick={async () => {
+              if (!user) return;
+              try {
+                await sendPushToUser(user.id, "Teste Push", "Se você viu isso, push funciona! 🎉", {});
+                toast({ title: "Push enviado para você mesmo!" });
+              } catch (err: any) {
+                toast({ title: "Erro ao enviar push", description: err.message, variant: "destructive" });
+              }
+            }}>
+              <BellRing className="mr-2 h-4 w-4" />
+              Enviar Push para Mim
             </Button>
             <Button variant="outline" className="w-full text-destructive" onClick={signOut}>
               <LogOut className="mr-2 h-4 w-4" />
