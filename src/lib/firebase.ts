@@ -41,9 +41,24 @@ export async function requestFCMToken(): Promise<string | null> {
     const swPath = `${base}firebase-messaging-sw.js`.replace("//", "/");
     let registration = await navigator.serviceWorker.getRegistration(swPath);
     if (!registration) {
+      console.log("[FCM] Registering new service worker at:", swPath);
       registration = await navigator.serviceWorker.register(swPath);
     }
-    
+
+    // Wait for the SW to be active before requesting token
+    if (registration.installing || registration.waiting) {
+      await new Promise<void>((resolve) => {
+        const sw = registration!.installing || registration!.waiting;
+        if (!sw) { resolve(); return; }
+        sw.addEventListener("statechange", () => {
+          if (sw.state === "activated") resolve();
+        });
+        // Fallback timeout
+        setTimeout(resolve, 5000);
+      });
+    }
+
+    console.log("[FCM] SW active, requesting token...");
     const token = await getToken(m, {
       vapidKey: VAPID_KEY,
       serviceWorkerRegistration: registration,

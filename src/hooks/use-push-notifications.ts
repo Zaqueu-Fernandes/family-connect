@@ -56,7 +56,33 @@ export function usePushNotifications(userId: string | undefined) {
     const unsub = onForegroundMessage((payload: any) => {
       const title = payload.data?.title || payload.notification?.title;
       const body = payload.data?.body || payload.notification?.body;
-      if (title) {
+      if (!title) return;
+
+      // When the page is hidden (minimized/background tab), Firebase still
+      // delivers the message as "foreground" because the JS context is alive,
+      // but toasts are invisible. Use native Notification instead.
+      if (document.hidden) {
+        playSound();
+        if ("Notification" in window && Notification.permission === "granted") {
+          const chatId = payload.data?.chat_id;
+          const notification = new Notification(title, {
+            body: body || "",
+            icon: "/pwa-192x192.png",
+            badge: "/pwa-192x192.png",
+            tag: "whatzak-push",
+            renotify: true,
+            data: payload.data || {},
+          } as NotificationOptions);
+          notification.onclick = () => {
+            window.focus();
+            if (chatId) {
+              window.location.href = `/chat/${chatId}`;
+            }
+            notification.close();
+          };
+        }
+      } else {
+        // App is visible - show in-app toast
         playSound();
         toast(title, { description: body });
       }

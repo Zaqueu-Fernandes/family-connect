@@ -13,7 +13,9 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
+// Background message handler - fires when the page is NOT loaded at all
 messaging.onBackgroundMessage((payload) => {
+  console.log("[firebase-sw] Background message received:", JSON.stringify(payload));
   // Data-only messages: extract title/body from data
   const title = payload.data?.title || payload.notification?.title;
   const body = payload.data?.body || payload.notification?.body;
@@ -22,8 +24,10 @@ messaging.onBackgroundMessage((payload) => {
       body: body || "",
       icon: "/pwa-192x192.png",
       badge: "/pwa-192x192.png",
-      tag: "whatzak-push",
+      tag: "whatzak-push-" + Date.now(), // unique tag to avoid deduplication
       renotify: true,
+      requireInteraction: true, // keep notification visible until user interacts
+      vibrate: [200, 100, 200, 100, 200], // vibration pattern for mobile
       data: payload.data || {},
     });
   }
@@ -38,13 +42,26 @@ self.addEventListener("notificationclick", (event) => {
 
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
+      // Try to focus an existing window
       for (const client of clientList) {
         if (client.url.includes(self.location.origin) && "focus" in client) {
           client.navigate(urlToOpen);
           return client.focus();
         }
       }
+      // No existing window - open a new one
       return self.clients.openWindow(urlToOpen);
     })
   );
+});
+
+// Keep the service worker alive
+self.addEventListener("install", (event) => {
+  console.log("[firebase-sw] Installing...");
+  self.skipWaiting();
+});
+
+self.addEventListener("activate", (event) => {
+  console.log("[firebase-sw] Activating...");
+  event.waitUntil(self.clients.claim());
 });
