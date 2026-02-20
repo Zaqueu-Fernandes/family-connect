@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { MessageCircle, Mail, Lock } from "lucide-react";
+import { Mail, Lock } from "lucide-react";
+import logo from "@/assets/logo.png";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Login() {
@@ -34,9 +35,7 @@ export default function Login() {
     <div className="flex min-h-screen items-center justify-center bg-primary/5 px-4">
       <Card className="w-full max-w-md animate-fade-in">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary">
-            <MessageCircle className="h-8 w-8 text-primary-foreground" />
-          </div>
+          <img src={logo} alt="WhatsZak" className="mx-auto mb-4 h-20 w-20 rounded-2xl" />
           <CardTitle className="text-2xl font-bold">WhatsZak</CardTitle>
           <CardDescription>Entre na sua conta</CardDescription>
         </CardHeader>
