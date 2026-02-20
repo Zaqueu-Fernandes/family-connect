@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { MessageCircle } from "lucide-react";
+import logo from "@/assets/logo.png";
 
 interface SplashScreenProps {
   onFinish: () => void;
@@ -23,9 +23,7 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
         fadeOut ? "opacity-0" : "opacity-100"
       }`}
     >
-      <div className="flex h-24 w-24 items-center justify-center rounded-full bg-primary-foreground/20 mb-6">
-        <MessageCircle className="h-14 w-14 text-primary-foreground" />
-      </div>
+      <img src={logo} alt="WhatsZak" className="h-28 w-28 rounded-2xl mb-6" />
       <h1 className="text-4xl font-bold text-primary-foreground">WhatsZak</h1>
       <p className="mt-2 text-primary-foreground/70 text-sm">Chat familiar seguro</p>
     </div>
